@@ -1,0 +1,107 @@
+
+import torch.optim as optim
+import time
+from data_for_Vae.get_triple_dataloader import train_loader, test_loader
+import torch
+from torchvision import transforms
+import os
+
+from torch import nn
+
+
+class LeNet5(nn.Module):
+    def __init__(self):
+        super(LeNet5, self).__init__()
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1, stride=1)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.maxpool1 = nn.MaxPool2d(2)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1, stride=1)
+        self.relu2 = nn.ReLU(inplace=True)
+        self.maxpool2 = nn.MaxPool2d(2)
+        self.linear1 = nn.Linear(7 * 7 * 64, 200)
+        self.relu3 = nn.ReLU(inplace=True)
+        self.linear2 = nn.Linear(200, 84)
+        self.relu4 = nn.ReLU(inplace=True)
+        self.linear3 = nn.Linear(84, 10)
+
+    def forward(self, x):
+        out = self.maxpool1(self.relu1(self.conv1(x)))
+        out = self.maxpool2(self.relu2(self.conv2(out)))
+        out = out.view(out.size(0), -1)
+        out = self.relu3(self.linear1(out))
+        out = self.relu4(self.linear2(out))
+        out = self.linear3(out)
+        return out
+
+device = 'cuda'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+best_acc = 0  # best test accuracy
+start_epoch = 0  # start from epoch 0 or last checkpoint epoch
+net = LeNet5()
+net = net.to(device)
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
+
+
+# Training
+def train(epoch):
+    print('Epoch {}/{}'.format(epoch + 1, 1000))
+    print('-' * 10)
+    start_time = time.time()
+    net.train()
+    train_loss = 0
+    correct = 0
+    total = 0
+    for batch_idx, (inputs, x, targets) in enumerate(train_loader):
+        # print(inputs.shape)
+        inputs, targets = inputs.to(device), targets.to(device)
+        optimizer.zero_grad()
+        outputs = net(inputs)
+        loss = criterion(outputs, targets)
+        loss.backward()
+        optimizer.step()
+
+        train_loss += loss.item()
+        _, predicted = outputs.max(1)
+        total += targets.size(0)
+        correct += predicted.eq(targets).sum().item()
+    end_time = time.time()
+    print('TrainLoss: %.3f | TrainAcc: %.3f%% (%d/%d) | Time Elapsed %.3f sec' % (
+    train_loss / (batch_idx + 1), 100. * correct / total, correct, total, end_time - start_time))
+
+
+def test(epoch):
+    global best_acc
+    net.eval()
+    test_loss = 0
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for batch_idx, (inputs, x,targets) in enumerate(test_loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = net(inputs)
+            loss = criterion(outputs, targets)
+
+            test_loss += loss.item()
+            _, predicted = outputs.max(1)
+            total += targets.size(0)
+            correct += predicted.eq(targets).sum().item()
+
+        print('TestLoss: %.3f | TestAcc: %.3f%% (%d/%d)' % (
+        test_loss / (batch_idx + 1), 100. * correct / total, correct, total))
+
+    # Save checkpoint.
+    acc = 100. * correct / total
+    print(acc)
+
+
+for epoch in range(start_epoch, start_epoch + 1000):
+    train(epoch)
+    test(epoch)
+print(best_acc)
+# -*-coding:utf-8-*-
+
+# TrainLoss: 0.000 | TrainAcc: 100.000% (60000/60000) | Time Elapsed 3.629 sec
+# TestLoss: 0.123 | TestAcc: 99.260% (9926/10000)
+# 99.26
+# Epoch 40/1000
